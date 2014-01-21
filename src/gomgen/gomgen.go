@@ -52,12 +52,12 @@ func (this *Generator) Generate() error {
 	}
 
 	// format the code
-	c, err := format.Source(this.Output.Bytes())
+	_, err := format.Source(this.Output.Bytes())
 	if err != nil {
-		return err
+		// return err
 	}
-	this.Output.Reset()
-	this.Output.Write(c)
+	// this.Output.Reset()
+	// this.Output.Write(c)
 
 	// done :)
 	return nil
@@ -71,8 +71,40 @@ func (this *Generator) genStruct(table *Table) error {
 
 // Generate scan function
 func (this *Generator) genScanFn(table *Table) error {
+	// the template
 	var t = template.Must(template.New("scanEntity").Parse(scanEntityTpl))
-	return t.Execute(this.Output, table)
+
+	// template params
+	type templateParams struct {
+		*Table
+		Vars   map[string]string // declared extra variables
+		Params string // params for the Scan method
+		Inits  []string // value loads for the variables
+	}
+	p := &templateParams{}
+	p.Table = table
+	p.Vars = make(map[string]string)
+
+	// process fields
+	var params []string
+	for _, field := range table.Fields {
+		if field.Type == GoTime {
+			if _, ok := p.Vars["string"]; ok {
+				p.Vars["string"] += ", " + field.Name
+			} else {
+				p.Vars["string"] = field.Name
+			}
+			params = append(params, "&" + field.Name)
+			init := "this." + field.Name + " = nil"
+			p.Inits = append(p.Inits, init)
+		} else {
+			params = append(params, "&this." + field.Name)
+		}
+	}
+	p.Params = strings.Join(params, ", ")
+
+	// process
+	return t.Execute(this.Output, p)
 }
 
 // represent a database table
