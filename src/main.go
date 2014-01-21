@@ -2,12 +2,10 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"gomgen"
-	"fmt"
 )
-
-
 
 func main() {
 	// database connection
@@ -21,12 +19,16 @@ func main() {
 	// Gomgen
 	mgen := gomgen.NewGenerator(db, schema)
 
-	// find all available tables
-	if err := mgen.Process(); err != nil {
+	// Analyze
+	if err := mgen.Analyse(); err != nil {
 		panic(err)
 	}
 
-	src := mgen.Generate()
-	fmt.Printf("%v\n", src)
-}
+	// generate
+	if err := mgen.Generate(); err != nil {
+		panic(err)
+	}
 
+	// done
+	fmt.Printf("%v\n", mgen.Output.String())
+}
