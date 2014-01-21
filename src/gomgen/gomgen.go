@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"go/format"
+	"text/template"
+	"bytes"
 )
 
 // Gomgen generator is the primary interface for scanning,
@@ -207,7 +209,7 @@ func (this *Generator) Generate() string {
 
 	// entities
 	for _, table := range this.Tables {
-		code += generateTable(table)
+		code += this.generateTable(table)
 	}
 
 	// format the code
@@ -221,7 +223,7 @@ func (this *Generator) Generate() string {
 }
 
 // generate the table entity
-func generateTable(table *Table) string {
+func (this *Generator) generateTable(table *Table) string {
 	// declare
 	code := "\ntype " + table.EntitySingular + " struct {\n"
 
@@ -232,8 +234,36 @@ func generateTable(table *Table) string {
 
 	// done
 	code += "}\n"
+
+	// scan function
+	code += this.generateScanFn(table)
+
 	return code
 }
+
+
+const scanEntityTpl = `
+// Scan {{.EntitySingular}} from rows object
+func (this *{{.EntitySingular}}) scan(rows *sql.Rows) error {
+	err := rows.Scan()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+`
+
+// Generate scan function
+func (this *Generator) generateScanFn(table *Table) string {
+	var t = template.Must(template.New("scanEntity").Parse(scanEntityTpl))
+
+	var b bytes.Buffer
+	if err := t.Execute(&b, table); err != nil {
+		panic(err)
+	}
+	return b.String()
+}
+
 
 // represent a database table
 type Table struct {
