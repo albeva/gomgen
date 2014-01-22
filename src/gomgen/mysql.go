@@ -107,6 +107,7 @@ func (this *Mysql) fetchColumns(table *Table) error {
 		// need to import time?
 		if field.Type == GoTime {
 			this.gen.Imports["time"] = true
+			field.Format = sqlTimeFormats[typ]
 		}
 
 		table.Fields = append(table.Fields, field)
@@ -118,6 +119,13 @@ func (this *Mysql) fetchColumns(table *Table) error {
 
 // use this to decode sql types. int(11), ...
 var sqlTypeMatch = regexp.MustCompile(`^([a-zA-Z_]+)\(([0-9]+)(,[0-9]+)?\)$`)
+
+// sql time formats
+var sqlTimeFormats = map[string]string{
+	"datetime": "2006-01-02 15:04:05",
+	"date":		"2006-01-02",
+	"time":		"15:04:05",
+}
 
 // convert sql data type to go type
 func (this *Mysql) detetcType(sqlType string, nullable bool) GoType {

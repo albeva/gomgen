@@ -1,6 +1,7 @@
 .idea
 .hg
 pkg/
+model/*
 src/github.com
 src/bitbucket.org
 

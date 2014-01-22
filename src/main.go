@@ -5,6 +5,7 @@ import (
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"gomgen"
+	"io/ioutil"
 )
 
 func main() {
@@ -29,6 +30,9 @@ func main() {
 		panic(err)
 	}
 
+	// write the file
+	ioutil.WriteFile("model/model.go", mgen.Output.Bytes(), 0644)
+
 	// done
-	fmt.Printf("%v\n", mgen.Output.String())
+	fmt.Printf("done\n")
 }

@@ -52,12 +52,12 @@ func (this *Generator) Generate() error {
 	}
 
 	// format the code
-	_, err := format.Source(this.Output.Bytes())
+	c, err := format.Source(this.Output.Bytes())
 	if err != nil {
 		// return err
 	}
-	// this.Output.Reset()
-	// this.Output.Write(c)
+	this.Output.Reset()
+	this.Output.Write(c)
 
 	// done :)
 	return nil
@@ -95,7 +95,11 @@ func (this *Generator) genScanFn(table *Table) error {
 				p.Vars["string"] = field.Name
 			}
 			params = append(params, "&" + field.Name)
-			init := "this." + field.Name + " = nil"
+			init := "if t, err := time.Parse(\"" + field.Format + "\", " + field.Name + "); err != nil {\n"
+			init += "	return err\n"
+			init += "} else {\n"
+			init += "	this." + field.Name + " = t\n"
+			init += "}"
 			p.Inits = append(p.Inits, init)
 		} else {
 			params = append(params, "&this." + field.Name)
@@ -161,15 +165,24 @@ var GoTypeMap = map[GoType]string{
 // represent individual field in the table
 type Field struct {
 	Name     string
+	SqlName	string
 	Default  sql.NullString
 	Nullable bool
 	Type     GoType
 	GoType   string
 	Primary  bool
 	Comment  string
+	Format 	 string
 }
 
 // the name of the field
-func NewField(name string) *Field {
-	return &Field{Name: name}
+func NewField(rawName string) *Field {
+	parts := strings.Split(strings.ToLower(rawName), "_")
+	for i := 0; i < len(parts); i++ {
+		parts[i] = strings.Title(parts[i])
+	}
+	return &Field{
+		Name: strings.Join(parts, ""),
+		SqlName: rawName,
+	}
 }
