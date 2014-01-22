@@ -95,11 +95,7 @@ func (this *Generator) genScanFn(table *Table) error {
 				p.Vars["string"] = field.Name
 			}
 			params = append(params, "&" + field.Name)
-			init := "if t, err := time.Parse(\"" + field.Format + "\", " + field.Name + "); err != nil {\n"
-			init += "	return err\n"
-			init += "} else {\n"
-			init += "	this." + field.Name + " = t\n"
-			init += "}"
+			init := "this." + field.Name + ", _ = time.Parse(\"" + field.Format + "\", " + field.Name + ")"
 			p.Inits = append(p.Inits, init)
 		} else {
 			params = append(params, "&this." + field.Name)
