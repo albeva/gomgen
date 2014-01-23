@@ -54,21 +54,25 @@ func (this *{{.EntitySingular}}) scan(rows scannable) error {
 `
 
 /*********************************************************
- * Fetch single/all row from the database
+ * Fetch row(s) from the database
  *********************************************************/
 const findEntityTpl = `
 // find {{ .EntitySingular }}
 func Find{{ .EntitySingular }}(query interface{}, params... interface{}) (*{{ .EntitySingular }}, error) {
-	var sql = "SELECT * FROM {{ .Name }}";
+	var sql = "SELECT {{ .EscapedName }}.* FROM {{ .EscapedName }}";
 	// decode the query part
-	switch val := query.(type) {
+	{{if .IdentityField}}switch val := query.(type) {
 	case int:
-		sql += " WHERE {{ .Name }}.{{index .Identity 0 }} = " + strconv.Itoa(val)
+		sql += " WHERE {{ .EscapedName }}.{{.IdentityField.EscapedName}} = " + strconv.Itoa(val)
 	case string:
 		sql += " " + val
 	default:
 		return nil, errors.New("Unsupported type")
-	}
+	}{{else}}if val, ok := query.(string); ok {
+		sql += " " + val
+	} else {
+		return nil, errors.New("Unsupported type")
+	}{{end}}
 	// process
 	entity := &{{ .EntitySingular }}{}
 	if err := entity.scan(theDb.QueryRow(sql, params...)); err != nil {
@@ -79,7 +83,7 @@ func Find{{ .EntitySingular }}(query interface{}, params... interface{}) (*{{ .E
 
 // find all {{ .EntityPlural }}
 func Find{{ .EntityPlural }}(params... interface{}) ([]*{{ .EntitySingular }}, error) {
-	sql := "SELECT * FROM {{ .Name }}"
+	sql := "SELECT {{ .EscapedName }}.* FROM {{ .EscapedName }}"
 	// first param might be extra sql. Rest are parameters
 	if len(params) > 0 {
 		value := params[0]

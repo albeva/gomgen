@@ -53,7 +53,9 @@ func (this *Mysql) fetchTables() error {
 		if err := rows.Scan(&name, &comment); err != nil {
 			return err
 		}
-		this.gen.Tables = append(this.gen.Tables, NewTable(name, comment))
+		table := NewTable(name, comment)
+		table.EscapedName = "`" + name + "`"
+		this.gen.Tables = append(this.gen.Tables, table)
 	}
 
 	return nil
@@ -91,6 +93,7 @@ func (this *Mysql) fetchColumns(table *Table) error {
 
 		// add field to the table
 		field := NewField(name)
+		field.EscapedName = "`" + name + "`"
 		field.Default = def
 		field.Nullable = nullable == "YES"
 		field.Comment = comment
@@ -101,7 +104,7 @@ func (this *Mysql) fetchColumns(table *Table) error {
 
 		// add to table identity
 		if field.Primary {
-			table.Identity = append(table.Identity, name)
+			table.Identity = append(table.Identity, field)
 		}
 
 		// need to import time?

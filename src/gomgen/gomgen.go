@@ -27,8 +27,7 @@ func NewGenerator(db *sql.DB, schema string) *Generator {
 		Tables: nil,
 		Imports: map[string]bool{
 			"database/sql": true,
-			"errors": 		true,
-			"strconv": 		true,
+			"errors":       true,
 		},
 		Output: &bytes.Buffer{},
 	}
@@ -42,17 +41,23 @@ func (this *Generator) Analyse() error {
 
 // Generate the model source code
 func (this *Generator) Generate() error {
-	var t = template.Must(template.New("headerTpl").Parse(headerTpl))
-	if err := t.Execute(this.Output, this); err != nil {
-		return err
-	}
-
 	// entities
 	for _, table := range this.Tables {
 		this.genStruct(table)
 		this.genScanFn(table)
 		this.genFindFn(table)
+		this.genSaveFn(table)
 	}
+
+	// generate the header
+	var header = bytes.Buffer{}
+	var t = template.Must(template.New("headerTpl").Parse(headerTpl))
+	if err := t.Execute(&header, this); err != nil {
+		return err
+	}
+
+	header.Write(this.Output.Bytes());
+	this.Output = &header;
 
 	// format the code
 	if true {
@@ -83,8 +88,8 @@ func (this *Generator) genScanFn(table *Table) error {
 	type templateParams struct {
 		*Table
 		Vars   map[string]string // declared extra variables
-		Params string // params for the Scan method
-		Inits  []string // value loads for the variables
+		Params string            // params for the Scan method
+		Inits  []string          // value loads for the variables
 	}
 	p := &templateParams{}
 	p.Table = table
@@ -99,11 +104,11 @@ func (this *Generator) genScanFn(table *Table) error {
 			} else {
 				p.Vars["string"] = field.Name
 			}
-			params = append(params, "&" + field.Name)
+			params = append(params, "&"+field.Name)
 			init := "this." + field.Name + ", _ = time.Parse(\"" + field.Format + "\", " + field.Name + ")"
 			p.Inits = append(p.Inits, init)
 		} else {
-			params = append(params, "&this." + field.Name)
+			params = append(params, "&this."+field.Name)
 		}
 	}
 	p.Params = strings.Join(params, ", ")
@@ -112,23 +117,60 @@ func (this *Generator) genScanFn(table *Table) error {
 	return t.Execute(this.Output, p)
 }
 
-
 // find function
 func (this *Generator) genFindFn(table *Table) error {
+	type params struct {
+		*Table
+		IdentityField *Field
+	}
+	p := params{Table:table}
+
+	// singly identifiable table
+	if len(table.Identity) == 1 {
+		id := table.Identity[0]
+		if id.Type == GoInt {
+			p.IdentityField = id
+			this.Imports["strconv"] = true
+		}
+	}
+
+	// render
 	var t = template.Must(template.New("findEntityTpl").Parse(findEntityTpl))
-	return t.Execute(this.Output, table)
+	return t.Execute(this.Output, p)
 	return nil
+}
+
+
+const entitySaveTpl = `
+// Save {{.EntitySingular}}
+func (this *{{.EntitySingular}}) Save() error {
+	// check identify fields in order to know if need to save or update
+	return nil
+}
+`
+
+// generate the table entity
+func (this *Generator) genSaveFn(table *Table) error {
+	type params struct {
+		*Table
+	}
+
+	p := &params{Table: table}
+
+	var t = template.Must(template.New("entitySaveTpl").Parse(entitySaveTpl))
+	return t.Execute(this.Output, p)
 }
 
 
 // represent a database table
 type Table struct {
 	Name           string
+	EscapedName    string
 	EntitySingular string
 	EntityPlural   string
 	Comment        string
 	Fields         []*Field
-	Identity       []string
+	Identity       []*Field
 }
 
 // create new table
@@ -174,15 +216,15 @@ var GoTypeMap = map[GoType]string{
 
 // represent individual field in the table
 type Field struct {
-	Name     string
-	SqlName	string
-	Default  sql.NullString
-	Nullable bool
-	Type     GoType
-	GoType   string
-	Primary  bool
-	Comment  string
-	Format 	 string
+	Name        string
+	EscapedName string
+	Default     sql.NullString
+	Nullable    bool
+	Type        GoType
+	GoType      string
+	Primary     bool
+	Comment     string
+	Format      string
 }
 
 // the name of the field
@@ -193,6 +235,5 @@ func NewField(rawName string) *Field {
 	}
 	return &Field{
 		Name: strings.Join(parts, ""),
-		SqlName: rawName,
 	}
 }

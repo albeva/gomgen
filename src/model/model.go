@@ -47,11 +47,11 @@ func (this *Article) scan(rows scannable) error {
 
 // find Article
 func FindArticle(query interface{}, params ...interface{}) (*Article, error) {
-	var sql = "SELECT * FROM article"
+	var sql = "SELECT `article`.* FROM `article`"
 	// decode the query part
 	switch val := query.(type) {
 	case int:
-		sql += " WHERE article.id = " + strconv.Itoa(val)
+		sql += " WHERE `article`.`id` = " + strconv.Itoa(val)
 	case string:
 		sql += " " + val
 	default:
@@ -67,7 +67,7 @@ func FindArticle(query interface{}, params ...interface{}) (*Article, error) {
 
 // find all Articles
 func FindArticles(params ...interface{}) ([]*Article, error) {
-	sql := "SELECT * FROM article"
+	sql := "SELECT `article`.* FROM `article`"
 	// first param might be extra sql. Rest are parameters
 	if len(params) > 0 {
 		value := params[0]
@@ -96,6 +96,11 @@ func FindArticles(params ...interface{}) ([]*Article, error) {
 	return entities, nil
 }
 
+// Save Article
+func (this *Article) Save() error {
+	return nil
+}
+
 // table category
 type Category struct {
 	Id   int
@@ -109,11 +114,11 @@ func (this *Category) scan(rows scannable) error {
 
 // find Category
 func FindCategory(query interface{}, params ...interface{}) (*Category, error) {
-	var sql = "SELECT * FROM category"
+	var sql = "SELECT `category`.* FROM `category`"
 	// decode the query part
 	switch val := query.(type) {
 	case int:
-		sql += " WHERE category.id = " + strconv.Itoa(val)
+		sql += " WHERE `category`.`id` = " + strconv.Itoa(val)
 	case string:
 		sql += " " + val
 	default:
@@ -129,7 +134,7 @@ func FindCategory(query interface{}, params ...interface{}) (*Category, error) {
 
 // find all Categories
 func FindCategories(params ...interface{}) ([]*Category, error) {
-	sql := "SELECT * FROM category"
+	sql := "SELECT `category`.* FROM `category`"
 	// first param might be extra sql. Rest are parameters
 	if len(params) > 0 {
 		value := params[0]
@@ -156,4 +161,9 @@ func FindCategories(params ...interface{}) ([]*Category, error) {
 		entities = append(entities, entity)
 	}
 	return entities, nil
+}
+
+// Save Category
+func (this *Category) Save() error {
+	return nil
 }
