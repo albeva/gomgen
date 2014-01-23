@@ -27,6 +27,8 @@ func NewGenerator(db *sql.DB, schema string) *Generator {
 		Tables: nil,
 		Imports: map[string]bool{
 			"database/sql": true,
+			"errors": 		true,
+			"strconv": 		true,
 		},
 		Output: &bytes.Buffer{},
 	}
@@ -49,15 +51,18 @@ func (this *Generator) Generate() error {
 	for _, table := range this.Tables {
 		this.genStruct(table)
 		this.genScanFn(table)
+		this.genFindFn(table)
 	}
 
 	// format the code
-	c, err := format.Source(this.Output.Bytes())
-	if err != nil {
-		// return err
+	if true {
+		c, err := format.Source(this.Output.Bytes())
+		if err != nil {
+			return err
+		}
+		this.Output.Reset()
+		this.Output.Write(c)
 	}
-	this.Output.Reset()
-	this.Output.Write(c)
 
 	// done :)
 	return nil
@@ -106,6 +111,15 @@ func (this *Generator) genScanFn(table *Table) error {
 	// process
 	return t.Execute(this.Output, p)
 }
+
+
+// find function
+func (this *Generator) genFindFn(table *Table) error {
+	var t = template.Must(template.New("findEntityTpl").Parse(findEntityTpl))
+	return t.Execute(this.Output, table)
+	return nil
+}
+
 
 // represent a database table
 type Table struct {

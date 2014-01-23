@@ -8,28 +8,17 @@ import (
 )
 
 func main() {
-
 	// database connection
 	db, err := sql.Open("mysql", "gomgen:dAXthbfKTzNenMRE@tcp(localhost:3306)/gomgen")
 	if err != nil {
 		panic(err)
 	}
 	defer db.Close()
+	model.Register(db);
 
-	// fetch rows
-	rows, err := db.Query("SELECT * FROM article ORDER BY create_date DESC")
-	if err != nil {
-		panic(err)
-	}
-	defer rows.Close()
-
-	// process
-	for rows.Next() {
-		article := &model.Article{}
-		if err := article.Scan(rows); err != nil {
-			panic(err)
-		}
-		fmt.Printf("Article: %v\n", article.CreateDate)
+	articles, err := model.FindArticles("ORDER BY create_date DESC")
+	for _, article := range articles {
+		fmt.Printf("%v\n", article)
 	}
 
 	fmt.Printf("Done\n")

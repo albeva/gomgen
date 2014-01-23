@@ -11,6 +11,11 @@ import (
 	{{end}}
 )
 
+// object can be scanned. Row, Rows
+type scannable interface {
+	Scan(...interface{}) error
+}
+
 // database connnection
 var theDb *sql.DB
 
@@ -25,6 +30,7 @@ func Register(db *sql.DB) error {
  * Generate entity struct type with the fields
  *********************************************************/
 const entityStructTpl = `
+// table {{ .Name }}
 type {{ .EntitySingular }} struct {
 	{{range $i, $field := .Fields }}{{ $field.Name }} {{ $field.GoType }}
 	{{end}}
@@ -36,7 +42,7 @@ type {{ .EntitySingular }} struct {
  *********************************************************/
 const scanEntityTpl = `
 // Scan {{.EntitySingular}} from rows object
-func (this *{{.EntitySingular}}) Scan(rows *sql.Rows) error {
+func (this *{{.EntitySingular}}) scan(rows scannable) error {
 	{{range $type, $vars := .Vars}}var {{$vars}} {{$type}}
 	{{end}}{{if .Vars}}err := rows.Scan({{ .Params }})
 	if err != nil {
@@ -44,5 +50,61 @@ func (this *{{.EntitySingular}}) Scan(rows *sql.Rows) error {
 	}{{range $i, $code := .Inits}}
 	{{ $code }}{{end}}
 	return nil{{ else }}return rows.Scan({{ .Params }}){{ end }}
+}
+`
+
+/*********************************************************
+ * Fetch single/all row from the database
+ *********************************************************/
+const findEntityTpl = `
+// find {{ .EntitySingular }}
+func Find{{ .EntitySingular }}(query interface{}, params... interface{}) (*{{ .EntitySingular }}, error) {
+	var sql = "SELECT * FROM {{ .Name }}";
+	// decode the query part
+	switch val := query.(type) {
+	case int:
+		sql += " WHERE {{ .Name }}.{{index .Identity 0 }} = " + strconv.Itoa(val)
+	case string:
+		sql += " " + val
+	default:
+		return nil, errors.New("Unsupported type")
+	}
+	// process
+	entity := &{{ .EntitySingular }}{}
+	if err := entity.scan(theDb.QueryRow(sql, params...)); err != nil {
+		return nil, err
+	}
+	return entity, nil
+}
+
+// find all {{ .EntityPlural }}
+func Find{{ .EntityPlural }}(params... interface{}) ([]*{{ .EntitySingular }}, error) {
+	sql := "SELECT * FROM {{ .Name }}"
+	// first param might be extra sql. Rest are parameters
+	if len(params) > 0 {
+		value := params[0]
+		params = params[1:]
+		query, ok := value.(string)
+		if !ok {
+			errors.New("Not supported query type")
+		}
+		sql += " " + query
+	}
+	// execute the query
+	rows, err := theDb.Query(sql, params...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	// process rows
+	var entities []*{{ .EntitySingular }}
+	for rows.Next() {
+		entity := &{{ .EntitySingular }}{}
+		if err := entity.scan(rows); err != nil {
+			return nil, err
+		}
+		entities = append(entities, entity)
+	}
+	return entities, nil
 }
 `

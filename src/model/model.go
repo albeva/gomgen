@@ -3,8 +3,15 @@ package model
 
 import (
 	"database/sql"
+	"errors"
+	"strconv"
 	"time"
 )
+
+// object can be scanned. Row, Rows
+type scannable interface {
+	Scan(...interface{}) error
+}
 
 // database connnection
 var theDb *sql.DB
@@ -15,6 +22,7 @@ func Register(db *sql.DB) error {
 	return nil
 }
 
+// table article
 type Article struct {
 	Id         int
 	Active     bool
@@ -26,7 +34,7 @@ type Article struct {
 }
 
 // Scan Article from rows object
-func (this *Article) Scan(rows *sql.Rows) error {
+func (this *Article) scan(rows scannable) error {
 	var CreateDate, UpdateDate string
 	err := rows.Scan(&this.Id, &this.Active, &this.Title, &this.Content, &CreateDate, &UpdateDate, &this.CategoryId)
 	if err != nil {
@@ -37,12 +45,115 @@ func (this *Article) Scan(rows *sql.Rows) error {
 	return nil
 }
 
+// find Article
+func FindArticle(query interface{}, params ...interface{}) (*Article, error) {
+	var sql = "SELECT * FROM article"
+	// decode the query part
+	switch val := query.(type) {
+	case int:
+		sql += " WHERE article.id = " + strconv.Itoa(val)
+	case string:
+		sql += " " + val
+	default:
+		return nil, errors.New("Unsupported type")
+	}
+	// process
+	entity := &Article{}
+	if err := entity.scan(theDb.QueryRow(sql, params...)); err != nil {
+		return nil, err
+	}
+	return entity, nil
+}
+
+// find all Articles
+func FindArticles(params ...interface{}) ([]*Article, error) {
+	sql := "SELECT * FROM article"
+	// first param might be extra sql. Rest are parameters
+	if len(params) > 0 {
+		value := params[0]
+		params = params[1:]
+		query, ok := value.(string)
+		if !ok {
+			errors.New("Not supported query type")
+		}
+		sql += " " + query
+	}
+	// execute the query
+	rows, err := theDb.Query(sql, params...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	// process rows
+	var entities []*Article
+	for rows.Next() {
+		entity := &Article{}
+		if err := entity.scan(rows); err != nil {
+			return nil, err
+		}
+		entities = append(entities, entity)
+	}
+	return entities, nil
+}
+
+// table category
 type Category struct {
 	Id   int
 	Name string
 }
 
 // Scan Category from rows object
-func (this *Category) Scan(rows *sql.Rows) error {
+func (this *Category) scan(rows scannable) error {
 	return rows.Scan(&this.Id, &this.Name)
+}
+
+// find Category
+func FindCategory(query interface{}, params ...interface{}) (*Category, error) {
+	var sql = "SELECT * FROM category"
+	// decode the query part
+	switch val := query.(type) {
+	case int:
+		sql += " WHERE category.id = " + strconv.Itoa(val)
+	case string:
+		sql += " " + val
+	default:
+		return nil, errors.New("Unsupported type")
+	}
+	// process
+	entity := &Category{}
+	if err := entity.scan(theDb.QueryRow(sql, params...)); err != nil {
+		return nil, err
+	}
+	return entity, nil
+}
+
+// find all Categories
+func FindCategories(params ...interface{}) ([]*Category, error) {
+	sql := "SELECT * FROM category"
+	// first param might be extra sql. Rest are parameters
+	if len(params) > 0 {
+		value := params[0]
+		params = params[1:]
+		query, ok := value.(string)
+		if !ok {
+			errors.New("Not supported query type")
+		}
+		sql += " " + query
+	}
+	// execute the query
+	rows, err := theDb.Query(sql, params...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	// process rows
+	var entities []*Category
+	for rows.Next() {
+		entity := &Category{}
+		if err := entity.scan(rows); err != nil {
+			return nil, err
+		}
+		entities = append(entities, entity)
+	}
+	return entities, nil
 }
