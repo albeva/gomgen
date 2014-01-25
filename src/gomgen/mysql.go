@@ -3,6 +3,7 @@ package gomgen
 import (
 	"database/sql"
 	"regexp"
+	"fmt"
 	"strconv"
 )
 
@@ -23,6 +24,13 @@ func (this *Mysql) Analyze(gen *Generator) error {
 	// fetch the columns
 	for _, table := range this.gen.Tables {
 		if err := this.fetchColumns(table); err != nil {
+			return err
+		}
+	}
+
+	// fetch the references
+	for _, table := range this.gen.Tables {
+		if err := this.fetchRelations(table); err != nil {
 			return err
 		}
 	}
@@ -60,6 +68,44 @@ func (this *Mysql) fetchTables() error {
 
 	return nil
 }
+
+
+// fetch table relations
+// support for:
+// One to Many - A can relate to many B
+// One to One  - A can relate to one B
+func (this *Mysql) fetchRelations(table *Table) error {
+	// fetch info
+	SQL := `
+		SELECT 	Relations.CONSTRAINT_NAME,
+				Relations.COLUMN_NAME,
+				Relations.REFERENCED_TABLE_NAME,
+				Relations.REFERENCED_COLUMN_NAME
+		FROM    information_schema.KEY_COLUMN_USAGE AS Relations
+		WHERE	Relations.CONSTRAINT_SCHEMA = ? AND
+				Relations.TABLE_SCHEMA = ? AND
+				Relations.REFERENCED_TABLE_SCHEMA = ? AND
+				Relations.TABLE_NAME = ? AND 
+				Relations.REFERENCED_TABLE_NAME IS NOT NULL AND Relations.REFERENCED_COLUMN_NAME IS NOT NULL
+	`
+	schema := this.gen.Schema
+	rows, err := this.gen.Db.Query(SQL, schema, schema, schema, table.Name)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	// process rows
+	for rows.Next() {
+		var name, srcColumn, dstTable, dstColumn string
+		if err := rows.Scan(&name, &srcColumn, &dstTable, &dstColumn); err != nil {
+			return err
+		}
+		fmt.Printf("%v: %v -> %v.%v\n", name, srcColumn, dstTable, dstColumn)
+	}
+	return nil
+}
+
 
 // Fetch table columns
 func (this *Mysql) fetchColumns(table *Table) error {

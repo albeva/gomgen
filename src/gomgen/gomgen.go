@@ -34,6 +34,16 @@ func NewGenerator(db *sql.DB, schema string) *Generator {
 	}
 }
 
+// find table by name
+func (this *Generator) GetTable(name string) *Table {
+	for _, table := range this.Tables {
+		if table.Name == name {
+			return table
+		}
+	}
+	return nil
+}
+
 // Investigate the database
 func (this *Generator) Analyse() error {
 	mysql := &Mysql{}
@@ -251,6 +261,23 @@ func (this *Generator) genSaveFn(table *Table) error {
 }
 
 
+type RelationType int
+const (
+	OneToOne RelationType = iota
+	OneToMany
+)
+
+
+// represent a relation between the tables
+type Relation struct {
+	Name 			string
+	Column 			*Field
+	TargetEntoty 	*Table
+	TargetColumn	*Field
+	Type 			RelationType
+}
+
+
 // represent a database table
 type Table struct {
 	Name           string
@@ -273,6 +300,16 @@ func NewTable(sqlName, comment string) *Table {
 		EntitySingular: strings.Title(singular),
 		EntityPlural:   strings.Title(plural),
 	}
+}
+
+// get field by name
+func (this *Table) GetField(name string) *Field {
+	for _, field := range this.Fields {
+		if field.Name == name {
+			return field
+		}
+	}
+	return nil
 }
 
 // Field data type mapping to Go
