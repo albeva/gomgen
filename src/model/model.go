@@ -4,6 +4,7 @@ package model
 import (
 	"database/sql"
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 )
@@ -24,13 +25,13 @@ func Register(db *sql.DB) error {
 
 // table article
 type Article struct {
-	Id         int
+	Id         int64
 	Active     bool
 	Title      string
 	Content    string
 	CreateDate time.Time
 	UpdateDate time.Time
-	CategoryId int
+	CategoryId int64
 }
 
 // Scan Article from rows object
@@ -98,12 +99,37 @@ func FindArticles(params ...interface{}) ([]*Article, error) {
 
 // Save Article
 func (this *Article) Save() error {
+	// update or insert?
+	if this.Id == 0 {
+		sql := "INSERT INTO `article` (`active`, `title`, `content`, `create_date`, `update_date`, `category_id`) VALUES (?, ?, ?, ?, ?, ?)"
+		result, err := theDb.Exec(sql, this.Active, this.Title, this.Content, this.CreateDate.Format("2006-01-02 15:04:05"), this.UpdateDate.Format("2006-01-02 15:04:05"), this.CategoryId)
+		if err != nil {
+			return err
+		}
+		lastId, err := result.LastInsertId()
+		if err != nil {
+			return err
+		}
+		this.Id = lastId
+	} else {
+		sql := "UPDATE `article` SET `active` = ?, `title` = ?, `content` = ?, `create_date` = ?, `update_date` = ?, `category_id` = ? WHERE `id` = ?"
+		result, err := theDb.Exec(sql, this.Active, this.Title, this.Content, this.CreateDate.Format("2006-01-02 15:04:05"), this.UpdateDate.Format("2006-01-02 15:04:05"), this.CategoryId, this.Id)
+		if err != nil {
+			return err
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		} else if affected != 1 {
+			return fmt.Errorf("Wrong number of rows affected. Expected 1. Got %d", affected)
+		}
+	}
 	return nil
 }
 
 // table category
 type Category struct {
-	Id   int
+	Id   int64
 	Name string
 }
 
@@ -165,5 +191,30 @@ func FindCategories(params ...interface{}) ([]*Category, error) {
 
 // Save Category
 func (this *Category) Save() error {
+	// update or insert?
+	if this.Id == 0 {
+		sql := "INSERT INTO `category` (`name`) VALUES (?)"
+		result, err := theDb.Exec(sql, this.Name)
+		if err != nil {
+			return err
+		}
+		lastId, err := result.LastInsertId()
+		if err != nil {
+			return err
+		}
+		this.Id = lastId
+	} else {
+		sql := "UPDATE `category` SET `name` = ? WHERE `id` = ?"
+		result, err := theDb.Exec(sql, this.Name, this.Id)
+		if err != nil {
+			return err
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		} else if affected != 1 {
+			return fmt.Errorf("Wrong number of rows affected. Expected 1. Got %d", affected)
+		}
+	}
 	return nil
 }

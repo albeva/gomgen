@@ -28,6 +28,7 @@ func NewGenerator(db *sql.DB, schema string) *Generator {
 		Imports: map[string]bool{
 			"database/sql": true,
 			"errors":       true,
+			"fmt":			true,
 		},
 		Output: &bytes.Buffer{},
 	}
@@ -144,7 +145,31 @@ func (this *Generator) genFindFn(table *Table) error {
 const entitySaveTpl = `
 // Save {{.EntitySingular}}
 func (this *{{.EntitySingular}}) Save() error {
-	// check identify fields in order to know if need to save or update
+	// update or insert?
+	if {{ .IdCheck }} {
+		sql := "INSERT INTO {{ .EscapedName }} ({{ .InsertCols }}) VALUES ({{ .InsertVals }})"
+		result, err := theDb.Exec(sql, {{.InsertParams}})
+		if err != nil {
+			return err
+		}
+		lastId, err := result.LastInsertId()
+		if err != nil {
+			return err
+		}
+		this.{{ .AutoIncField.Name }} = lastId
+	} else {
+		sql := "UPDATE {{ .EscapedName }} SET {{ .UpdateVals }} WHERE {{ .Where }}"
+		result, err := theDb.Exec(sql, {{.UpdateParams}})
+		if err != nil {
+			return err
+		}
+		affected, err := result.RowsAffected();
+		if err != nil {
+			return err
+		} else if affected != 1 {
+			return fmt.Errorf("Wrong number of rows affected. Expected 1. Got %d", affected)
+		}
+	}
 	return nil
 }
 `
@@ -153,10 +178,74 @@ func (this *{{.EntitySingular}}) Save() error {
 func (this *Generator) genSaveFn(table *Table) error {
 	type params struct {
 		*Table
+		IdCheck 	string
+		InsertCols 	string
+		InsertVals 	string
+		UpdateVals 	string
+		Where 		string
+		UpdateParams string
+		InsertParams string
+		AutoIncField *Field
 	}
-
 	p := &params{Table: table}
 
+	// identity check to know if insert or update
+	for _, field := range table.Identity {
+		if len(p.IdCheck) > 0 {
+			p.IdCheck += " && "
+		}
+		p.IdCheck += "this." + field.Name + " == "
+		if field.Type == GoInt || field.Type == GoFloat64 {
+			p.IdCheck += "0"
+		} else if field.Type == GoString {
+			p.IdCheck += "\"\""
+		}
+
+		if len(p.Where) > 0 {
+			p.Where += " AND "
+		}
+		p.Where += field.EscapedName + " = ?"
+
+		if len(p.UpdateParams) > 0 {
+			p.UpdateParams += ", "
+		}
+		p.UpdateParams += "this." + field.Name
+
+		if field.AutoInc {
+			p.AutoIncField = field
+		}
+	}
+
+	// insert / update cols
+	first := true
+	for _, field := range table.Fields {
+		// skip primary key columns
+		if field.Primary {
+			continue
+		}
+		// separate
+		if !first {
+			p.InsertCols += ", "
+			p.InsertVals += ", "
+			p.UpdateVals += ", "
+			p.InsertParams += ", "
+		}
+		first = false
+
+		p.InsertCols += field.EscapedName;
+		p.InsertVals += "?"
+		p.UpdateVals += field.EscapedName + " = ?"
+
+		p.InsertParams += "this." + field.Name;
+		if field.Type == GoTime {
+			p.InsertParams += ".Format(\"" + field.Format + "\")"
+		}
+	}
+
+	// update params
+	p.UpdateParams = p.InsertParams + ", " + p.UpdateParams
+
+	// render the template
 	var t = template.Must(template.New("entitySaveTpl").Parse(entitySaveTpl))
 	return t.Execute(this.Output, p)
 }
@@ -203,7 +292,7 @@ const (
 
 // map GoType constants to strings of actual types
 var GoTypeMap = map[GoType]string{
-	GoInt:         "int",
+	GoInt:         "int64",
 	GoFloat64:     "float64",
 	GoBool:        "bool",
 	GoString:      "string",
@@ -223,6 +312,7 @@ type Field struct {
 	Type        GoType
 	GoType      string
 	Primary     bool
+	AutoInc		bool
 	Comment     string
 	Format      string
 }

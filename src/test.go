@@ -17,13 +17,14 @@ func main() {
 	model.Register(db);
 
 	// find 1
-	article, err := model.FindArticle("WHERE id = 2")
-	fmt.Printf("article = %v\nerr = %v\n", article, err)
-
-	// find all
-	articles, err := model.FindArticles("ORDER BY create_date DESC")
-	for _, article := range articles {
-		fmt.Printf("%v\n", article)
+	article := &model.Article{}
+	article.Active = true
+	article.Title = "New Article"
+	article.Content = "Some random content"
+	article.CategoryId = 4
+	error := article.Save()
+	if error != nil {
+		panic(error)
 	}
 
 	fmt.Printf("Done\n")

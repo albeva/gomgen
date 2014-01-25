@@ -100,6 +100,7 @@ func (this *Mysql) fetchColumns(table *Table) error {
 		field.Type = this.detetcType(typ, field.Nullable)
 		field.GoType = GoTypeMap[field.Type]
 		field.Primary = key == "PRI"
+		field.AutoInc = field.Primary && extra == "auto_increment"
 		field.Comment = comment
 
 		// add to table identity
