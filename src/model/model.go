@@ -127,6 +127,12 @@ func (this *Article) Save() error {
 	return nil
 }
 
+// find related Category
+func (this *Article) FindCategory() (*Category, error) {
+	sql := "WHERE `category`.`id` = ?"
+	return FindCategory(sql, this.CategoryId)
+}
+
 // table category
 type Category struct {
 	Id   int64

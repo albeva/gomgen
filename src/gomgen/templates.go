@@ -112,3 +112,39 @@ func Find{{ .EntityPlural }}(params... interface{}) ([]*{{ .EntitySingular }}, e
 	return entities, nil
 }
 `
+
+
+/*********************************************************
+ * Save or insert entity into the database
+ *********************************************************/
+const entitySaveTpl = `
+// Save {{.EntitySingular}}
+func (this *{{.EntitySingular}}) Save() error {
+	// update or insert?
+	if {{ .IdCheck }} {
+		sql := "INSERT INTO {{ .EscapedName }} ({{ .InsertCols }}) VALUES ({{ .InsertVals }})"
+		result, err := theDb.Exec(sql, {{.InsertParams}})
+		if err != nil {
+			return err
+		}
+		lastId, err := result.LastInsertId()
+		if err != nil {
+			return err
+		}
+		this.{{ .AutoIncField.Name }} = lastId
+	} else {
+		sql := "UPDATE {{ .EscapedName }} SET {{ .UpdateVals }} WHERE {{ .Where }}"
+		result, err := theDb.Exec(sql, {{.UpdateParams}})
+		if err != nil {
+			return err
+		}
+		affected, err := result.RowsAffected();
+		if err != nil {
+			return err
+		} else if affected != 1 {
+			return fmt.Errorf("Wrong number of rows affected. Expected 1. Got %d", affected)
+		}
+	}
+	return nil
+}
+`

@@ -2,9 +2,10 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	_ "github.com/go-sql-driver/mysql"
+	"fmt"
 	"gomgen"
+	"os"
 	"io/ioutil"
 )
 
@@ -30,8 +31,11 @@ func main() {
 		panic(err)
 	}
 
+	// working path
+	wp, _ := os.Getwd()
+
 	// write the file
-	ioutil.WriteFile("model/model.go", mgen.Output.Bytes(), 0644)
+	ioutil.WriteFile(wp + "/model/model.go", mgen.Output.Bytes(), 0644)
 
 	// done
 	fmt.Printf("done\n")

@@ -16,16 +16,10 @@ func main() {
 	defer db.Close()
 	model.Register(db);
 
-	// find 1
-	article := &model.Article{}
-	article.Active = true
-	article.Title = "New Article"
-	article.Content = "Some random content"
-	article.CategoryId = 4
-	error := article.Save()
-	if error != nil {
-		panic(error)
-	}
+	// find
+	article, _ := model.FindArticle(1)
+	category, _ := article.FindCategory();
+	fmt.Printf("category: %v\n", category.Name)
 
 	fmt.Printf("Done\n")
 }

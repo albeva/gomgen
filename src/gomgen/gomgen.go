@@ -28,7 +28,7 @@ func NewGenerator(db *sql.DB, schema string) *Generator {
 		Imports: map[string]bool{
 			"database/sql": true,
 			"errors":       true,
-			"fmt":			true,
+			"fmt":          true,
 		},
 		Output: &bytes.Buffer{},
 	}
@@ -58,6 +58,7 @@ func (this *Generator) Generate() error {
 		this.genScanFn(table)
 		this.genFindFn(table)
 		this.genSaveFn(table)
+		this.genRelFn(table)
 	}
 
 	// generate the header
@@ -67,8 +68,8 @@ func (this *Generator) Generate() error {
 		return err
 	}
 
-	header.Write(this.Output.Bytes());
-	this.Output = &header;
+	header.Write(this.Output.Bytes())
+	this.Output = &header
 
 	// format the code
 	if true {
@@ -134,7 +135,7 @@ func (this *Generator) genFindFn(table *Table) error {
 		*Table
 		IdentityField *Field
 	}
-	p := params{Table:table}
+	p := params{Table: table}
 
 	// singly identifiable table
 	if len(table.Identity) == 1 {
@@ -151,48 +152,15 @@ func (this *Generator) genFindFn(table *Table) error {
 	return nil
 }
 
-
-const entitySaveTpl = `
-// Save {{.EntitySingular}}
-func (this *{{.EntitySingular}}) Save() error {
-	// update or insert?
-	if {{ .IdCheck }} {
-		sql := "INSERT INTO {{ .EscapedName }} ({{ .InsertCols }}) VALUES ({{ .InsertVals }})"
-		result, err := theDb.Exec(sql, {{.InsertParams}})
-		if err != nil {
-			return err
-		}
-		lastId, err := result.LastInsertId()
-		if err != nil {
-			return err
-		}
-		this.{{ .AutoIncField.Name }} = lastId
-	} else {
-		sql := "UPDATE {{ .EscapedName }} SET {{ .UpdateVals }} WHERE {{ .Where }}"
-		result, err := theDb.Exec(sql, {{.UpdateParams}})
-		if err != nil {
-			return err
-		}
-		affected, err := result.RowsAffected();
-		if err != nil {
-			return err
-		} else if affected != 1 {
-			return fmt.Errorf("Wrong number of rows affected. Expected 1. Got %d", affected)
-		}
-	}
-	return nil
-}
-`
-
 // generate the table entity
 func (this *Generator) genSaveFn(table *Table) error {
 	type params struct {
 		*Table
-		IdCheck 	string
-		InsertCols 	string
-		InsertVals 	string
-		UpdateVals 	string
-		Where 		string
+		IdCheck      string
+		InsertCols   string
+		InsertVals   string
+		UpdateVals   string
+		Where        string
 		UpdateParams string
 		InsertParams string
 		AutoIncField *Field
@@ -242,11 +210,11 @@ func (this *Generator) genSaveFn(table *Table) error {
 		}
 		first = false
 
-		p.InsertCols += field.EscapedName;
+		p.InsertCols += field.EscapedName
 		p.InsertVals += "?"
 		p.UpdateVals += field.EscapedName + " = ?"
 
-		p.InsertParams += "this." + field.Name;
+		p.InsertParams += "this." + field.Name
 		if field.Type == GoTime {
 			p.InsertParams += ".Format(\"" + field.Format + "\")"
 		}
@@ -260,23 +228,50 @@ func (this *Generator) genSaveFn(table *Table) error {
 	return t.Execute(this.Output, p)
 }
 
+const entityOneToOneTpl = `
+// find related {{ .TargetEntity.EntitySingular }}
+func (this *{{ .Table.EntitySingular }}) Find{{ .Name }}() (*{{ .TargetEntity.EntitySingular }}, error) {
+	sql := "WHERE {{ .TargetEntity.EscapedName }}.{{ .TargetColumn.EscapedName }} = ?"
+	return Find{{ .TargetEntity.EntitySingular }}(sql, this.{{ .Column.Name }})
+}
+`
 
+// generate relations
+func (this *Generator) genRelFn(table *Table) error {
+	var t = template.Must(template.New("entityOneToOneTpl").Parse(entityOneToOneTpl))
+	for _, rel := range table.Relations {
+		return t.Execute(this.Output, rel)
+	}
+	return nil
+}
+
+// specify the relation type between the entities
 type RelationType int
+
 const (
 	OneToOne RelationType = iota
 	OneToMany
+	ManyToMany
 )
-
 
 // represent a relation between the tables
 type Relation struct {
-	Name 			string
-	Column 			*Field
-	TargetEntoty 	*Table
-	TargetColumn	*Field
-	Type 			RelationType
+	Name            string
+	Table 			*Table
+	Column          *Field // null for many-to-many
+	TargetEntity    *Table
+	TargetColumn    *Field // null for many-to-many
+	MiddleEntity    *Table // connecting table
+	MiddleSrcColumn *Field // point to this entity
+	MiddleDstColumn *Field // point to target entity
 }
 
+// Create new relation object
+func NewRelation(name string) *Relation {
+	return &Relation{
+		Name:  strings.Title(strings.ToLower(name)),
+	}
+}
 
 // represent a database table
 type Table struct {
@@ -287,6 +282,7 @@ type Table struct {
 	Comment        string
 	Fields         []*Field
 	Identity       []*Field
+	Relations      []*Relation
 }
 
 // create new table
@@ -305,7 +301,7 @@ func NewTable(sqlName, comment string) *Table {
 // get field by name
 func (this *Table) GetField(name string) *Field {
 	for _, field := range this.Fields {
-		if field.Name == name {
+		if field.RealName == name {
 			return field
 		}
 	}
@@ -344,12 +340,13 @@ var GoTypeMap = map[GoType]string{
 type Field struct {
 	Name        string
 	EscapedName string
+	RealName	string
 	Default     sql.NullString
 	Nullable    bool
 	Type        GoType
 	GoType      string
 	Primary     bool
-	AutoInc		bool
+	AutoInc     bool
 	Comment     string
 	Format      string
 }
@@ -362,5 +359,6 @@ func NewField(rawName string) *Field {
 	}
 	return &Field{
 		Name: strings.Join(parts, ""),
+		RealName: rawName,
 	}
 }

@@ -69,6 +69,9 @@ func (this *Mysql) fetchTables() error {
 	return nil
 }
 
+// mathc foo_id, article_id field names for relations
+var sqlTableIdFieldMatch = regexp.MustCompile(`^([a-zA-Z0-9_]+)_id$`)
+
 
 // fetch table relations
 // support for:
@@ -101,7 +104,22 @@ func (this *Mysql) fetchRelations(table *Table) error {
 		if err := rows.Scan(&name, &srcColumn, &dstTable, &dstColumn); err != nil {
 			return err
 		}
+
 		fmt.Printf("%v: %v -> %v.%v\n", name, srcColumn, dstTable, dstColumn)
+
+		// relation name
+		t := sqlTableIdFieldMatch.FindStringSubmatch(srcColumn)
+		if len(t) > 1 {
+			name = t[1]
+		}
+
+		// add relation to the source
+		srcRelation := NewRelation(name)
+		srcRelation.Table = table
+		srcRelation.Column = table.GetField(srcColumn)
+		srcRelation.TargetEntity = this.gen.GetTable(dstTable)
+		srcRelation.TargetColumn = srcRelation.TargetEntity.GetField(dstColumn)
+		table.Relations = append(table.Relations, srcRelation)
 	}
 	return nil
 }
